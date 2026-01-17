@@ -1,6 +1,13 @@
 package me.creepermaxcz.mcbots;
 
-import org.geysermc.mcprotocollib.auth.GameProfile;
+import java.net.InetSocketAddress;
+import java.time.Instant;
+import java.util.BitSet;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.geysermc.mcprotocollib.auth.SessionService;
 import org.geysermc.mcprotocollib.network.ClientSession;
 import org.geysermc.mcprotocollib.network.ProxyInfo;
@@ -9,7 +16,6 @@ import org.geysermc.mcprotocollib.network.event.session.DisconnectedEvent;
 import org.geysermc.mcprotocollib.network.event.session.SessionAdapter;
 import org.geysermc.mcprotocollib.network.factory.ClientNetworkSessionFactory;
 import org.geysermc.mcprotocollib.network.packet.Packet;
-import org.geysermc.mcprotocollib.network.session.ClientNetworkSession;
 import org.geysermc.mcprotocollib.protocol.MinecraftConstants;
 import org.geysermc.mcprotocollib.protocol.MinecraftProtocol;
 import org.geysermc.mcprotocollib.protocol.data.UnexpectedEncryptionException;
@@ -21,13 +27,7 @@ import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.Serverbound
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundChatPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.ServerboundClientCommandPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.ServerboundAcceptTeleportationPacket;
-import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.*;
-
-import java.net.InetSocketAddress;
-import java.time.Instant;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosRotPacket;
 
 public class Bot extends Thread {
 
@@ -37,10 +37,12 @@ public class Bot extends Thread {
     private ClientSession client;
     private boolean hasMainListener;
 
-    private double lastX, lastY, lastZ = -1;
+    private double lastX = 0, lastY = 0, lastZ = 0;
+    private float lastYaw = 0.0f;
+    private float lastPitch = 0.0f;
+    private boolean positionInitialized = false;
 
     private boolean connected;
-
     private boolean manualDisconnecting = false;
 
     public Bot(MinecraftProtocol protocol, InetSocketAddress address, ProxyInfo proxy) {
@@ -89,6 +91,7 @@ public class Bot extends Thread {
                         lastX = p.getPosition().getX();
                         lastY = p.getPosition().getY();
                         lastZ = p.getPosition().getZ();
+                        positionInitialized = true;
 
                         client.send(new ServerboundAcceptTeleportationPacket(p.getId()));
                     }
@@ -155,10 +158,7 @@ public class Bot extends Thread {
             ));
         } else {
             // Send chat message
-            // From 1.19.1 or 1.19, the ServerboundChatPacket needs timestamp, salt and signed signature to generate packet.
-            // tmpSignature will provide an empty byte array that can pretend it as signature.
-            // salt is set 0 since this is offline server and no body will check it.
-
+            // For 1.21.7, the constructor requires: message, timestamp, salt, signature, messageCount, acknowledged
             client.send(new ServerboundChatPacket(
                     text,
                     Instant.now().toEpochMilli(),
@@ -187,13 +187,15 @@ public class Bot extends Thread {
 
     public void fallDown()
     {
-        if (connected && lastY > 0) {
+        if (connected && positionInitialized && lastY > 0) {
             move(0, -0.5, 0);
         }
     }
 
     public void move(double x, double y, double z)
     {
+        if (!positionInitialized) return;
+        
         lastX += x;
         lastY += y;
         lastZ += z;
@@ -202,7 +204,10 @@ public class Bot extends Thread {
 
     public void moveTo(double x, double y, double z)
     {
-        client.send(new ServerboundMovePlayerPosPacket(true, false, x, y, z));
+        if (!positionInitialized) return;
+        
+        // ServerboundMovePlayerPosRotPacket constructor: (onGround, horizontalCollision, x, y, z, yaw, pitch)
+        client.send(new ServerboundMovePlayerPosRotPacket(true, false, x, y, z, lastYaw, lastPitch));
     }
 
     public boolean isConnected() {

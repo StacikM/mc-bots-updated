@@ -7,19 +7,32 @@ version '1.2.17'
 
 repositories {
     mavenCentral()
+    maven {
+        name = 'opencollab-releases'
+        url = 'https://repo.opencollab.dev/maven-releases/'
+    }
+    maven {
+        name = 'opencollab-snapshots'
+        url = 'https://repo.opencollab.dev/maven-snapshots/'
+    }
     maven { url 'https://jitpack.io' }
-    maven { url 'https://repo.opencollab.dev/maven-snapshots/' }
-    maven { url 'https://repo.opencollab.dev/maven-releases/' }
 }
 
 dependencies {
-    implementation 'org.geysermc.mcprotocollib:protocol:1.21.7-SNAPSHOT'
-    implementation 'net.kyori:adventure-text-serializer-gson:4.24.0'
+    // MCProtocolLib for 1.21.7 (works with 1.21.11)
+    implementation 'org.geysermc.mcprotocollib:protocol:1.21.7-1'
+    
+    // Required dependencies
+    implementation 'net.kyori:adventure-text-serializer-gson:4.17.0'
     implementation 'commons-cli:commons-cli:1.9.0'
     implementation 'com.diogonunes:JColor:5.5.1'
     implementation 'dnsjava:dnsjava:3.5.3'
     implementation 'org.slf4j:slf4j-nop:2.0.17'
     implementation 'org.jline:jline:3.30.4'
+    
+    // MinecraftAuth for online mode (already included as transitive dependency of mcprotocollib)
+    // But we'll declare it explicitly to ensure version compatibility
+    implementation 'net.raphimc:MinecraftAuth:4.1.1'
 }
 
 java {
@@ -31,8 +44,8 @@ java {
 jar {
     manifest {
         attributes 'Main-Class': 'me.creepermaxcz.mcbots.Main'
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from {
         configurations.runtimeClasspath.filter{ it.exists() }.collect { it.isDirectory() ? it : zipTree(it) }
     }
